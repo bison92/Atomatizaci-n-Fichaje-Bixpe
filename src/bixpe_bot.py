@@ -59,7 +59,61 @@ def run_automation(email, password, action, headless=True, dry_run=False):
         
         # Capture console logs to debug JS errors
         page.on("console", lambda msg: print(f"Browser Console: {msg.text}"))
+        
+        # Capture network failures to identify 403 sources
+        page.on("requestfailed", lambda request: print(f"Request failed: {request.url} - {request.failure}"))
+        page.on("response", lambda response: print(f"Response: {response.status} {response.url}") if response.status >= 400 else None)
 
+        # -------------------------------------------------------------------------
+        # JS INJECTION: Override Geolocation API & Google Maps Mock
+        # 1. Mock Geolocation to return Zaragoza immediately
+        # 2. Mock window.google to prevent crash if Maps API fails (403)
+        # -------------------------------------------------------------------------
+        page.add_init_script("""
+            // 1. Mock Geolocation
+            const mockLocation = {
+                coords: {
+                    latitude: 41.651304749576475,
+                    longitude: -0.9345988765123099,
+                    accuracy: 10,
+                    altitude: null,
+                    altitudeAccuracy: null,
+                    heading: null,
+                    speed: null
+                },
+                timestamp: Date.now()
+            };
+            
+            navigator.geolocation.getCurrentPosition = function(success, error, options) {
+                console.log("[MockGeo] App requested location. Returning Zaragoza.");
+                success(mockLocation);
+            };
+            
+            navigator.geolocation.watchPosition = function(success, error, options) {
+                console.log("[MockGeo] App watching location. Returning Zaragoza.");
+                success(mockLocation);
+                return 42; 
+            };
+            
+            // 2. Mock Google Maps to survive 403/Block
+            window.google = window.google || {};
+            window.google.maps = window.google.maps || {
+                Geocoder: function() { 
+                    return { 
+                        geocode: function(req, cb) { 
+                            console.log("[MockMaps] Geocode requested. Returning success.");
+                            cb([{ geometry: { location: { lat: () => 41.65, lng: () => -0.93 } } }], 'OK'); 
+                        } 
+                    }; 
+                },
+                Map: function() { console.log("[MockMaps] Map initialized."); },
+                Marker: function() {},
+                LatLng: function(lat, lng) { return { lat: lat, lng: lng }; },
+                Animation: {},
+                MapTypeId: { ROADMAP: 'roadmap' }
+            };
+        """)
+        # -------------------------------------------------------------------------
         # -------------------------------------------------------------------------
         # JS INJECTION: Override Geolocation API to bypass generic 403 blocks
         # This mocks the API so it returns success immediately without network check
