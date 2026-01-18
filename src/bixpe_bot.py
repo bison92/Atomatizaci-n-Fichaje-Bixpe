@@ -60,14 +60,25 @@ def run_automation(email, password, action, headless=True, dry_run=False):
         # Capture console logs to debug JS errors
         page.on("console", lambda msg: print(f"Browser Console: {msg.text}"))
         
-        # Capture network failures to identify 403 sources
+        # Capture network failures to identify sources
         page.on("requestfailed", lambda request: print(f"Request failed: {request.url} - {request.failure}"))
-        page.on("response", lambda response: print(f"Response: {response.status} {response.url}") if response.status >= 400 else None)
+        
+        # -------------------------------------------------------------------------
+        # NETWORK INTERCEPTION: Block problematic scripts
+        # 1. Block Google Maps (real script) so the app uses our Mock
+        # 2. Block trackers/analytics to speed up load and avoid noise
+        # -------------------------------------------------------------------------
+        def block_routes(route):
+            route.abort()
 
+        # Block Maps, Analytics, Facebook, etc.
+        page.route("**/*maps.googleapis.com*", block_routes)
+        page.route("**/*analytics*", block_routes)
+        page.route("**/*facebook*", block_routes)
+        page.route("**/*cookie-script*", block_routes)
+        
         # -------------------------------------------------------------------------
         # JS INJECTION: Override Geolocation API & Google Maps Mock
-        # 1. Mock Geolocation to return Zaragoza immediately
-        # 2. Mock window.google to prevent crash if Maps API fails (403)
         # -------------------------------------------------------------------------
         page.add_init_script("""
             // 1. Mock Geolocation
