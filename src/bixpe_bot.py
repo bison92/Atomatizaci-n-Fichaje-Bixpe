@@ -61,18 +61,54 @@ def run_automation(email, password, action, headless=True, dry_run=False):
         # Login
         print("Logging in...")
         try:
-            # Wait explicitly for the username field
-            page.wait_for_selector('#UserName', state='visible')
-
-            # Selectors identified from user screenshots
-            # Email field has id="UserName"
-            page.fill('#UserName', email)
+            # Wait explicitly for the username field with multiple potential selectors
+            email_selectors = ['#UserName', 'input[name="UserName"]', 'input[type="email"]', 'input[id*="user"]']
+            password_selectors = ['input[type="password"]', 'input[name="Password"]', '#Password']
+            submit_selectors = ['text=INICIAR SESIÓN', 'button[type="submit"]', 'text=Entrar', 'text=Login']
             
-            # Password field - using type="password" is robust if ID is dynamic or not visible
-            page.fill('input[type="password"]', password)
+            # Fill Email
+            email_filled = False
+            for selector in email_selectors:
+                try:
+                    if page.is_visible(selector, timeout=2000):
+                        page.fill(selector, email)
+                        email_filled = True
+                        print(f"Filled email using: {selector}")
+                        break
+                except:
+                    continue
+            
+            if not email_filled:
+                print("Could not find email field. Dumping HTML snippet...")
+                print(page.inner_html("body")[:500])
+                raise Exception("Email field not found")
 
-            # Button text is "INICIAR SESIÓN"
-            page.click("text=INICIAR SESIÓN")
+            # Fill Password
+            for selector in password_selectors:
+                try:
+                    if page.is_visible(selector, timeout=2000):
+                        page.fill(selector, password)
+                        print(f"Filled password using: {selector}")
+                        break
+                except:
+                   continue
+
+            # Click Login
+            clicked = False
+            for selector in submit_selectors:
+                try:
+                    if page.is_visible(selector, timeout=2000):
+                        page.click(selector)
+                        print(f"Clicked login button: {selector}")
+                        clicked = True
+                        break
+                except:
+                    continue
+            
+            if not clicked:
+                 # Last resort: press Enter
+                 page.press('input[type="password"]', 'Enter')
+                 print("Pressed Enter to login")
             
             # Wait for dashboard to load
             try:
