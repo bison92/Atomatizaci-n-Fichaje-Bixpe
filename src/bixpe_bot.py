@@ -38,8 +38,12 @@ def run_automation(email, password, action, headless=True, dry_run=False):
         browser = p.chromium.launch(headless=headless, args=["--no-sandbox", "--disable-setuid-sandbox"])
         
         # Use a standard User-Agent to avoid being blocked as a bot
+        # Also grant geolocation permissions as Bixpe might require them to show the clock-in buttons
         context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            permissions=['geolocation'],
+            geolocation={'latitude': 40.4168, 'longitude': -3.7038}, # Madrid
+            viewport={'width': 1280, 'height': 720}
         )
         page = context.new_page()
         page.set_default_timeout(60000) # Increase default timeout to 60s
