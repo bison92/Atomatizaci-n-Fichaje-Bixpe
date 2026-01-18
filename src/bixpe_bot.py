@@ -50,7 +50,7 @@ def run_automation(email, password, action, headless=True, dry_run=False):
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             permissions=['geolocation'],
-            geolocation={'latitude': 40.4168, 'longitude': -3.7038}, # Madrid
+            geolocation={'latitude': 41.651304749576475, 'longitude': -0.9345988765123099}, # Zaragoza
             viewport={'width': 1280, 'height': 720},
             locale='es-ES'
         )
@@ -59,6 +59,37 @@ def run_automation(email, password, action, headless=True, dry_run=False):
         
         # Capture console logs to debug JS errors
         page.on("console", lambda msg: print(f"Browser Console: {msg.text}"))
+
+        # -------------------------------------------------------------------------
+        # JS INJECTION: Override Geolocation API to bypass generic 403 blocks
+        # This mocks the API so it returns success immediately without network check
+        # -------------------------------------------------------------------------
+        page.add_init_script("""
+            const mockLocation = {
+                coords: {
+                    latitude: 41.651304749576475,
+                    longitude: -0.9345988765123099,
+                    accuracy: 10,
+                    altitude: null,
+                    altitudeAccuracy: null,
+                    heading: null,
+                    speed: null
+                },
+                timestamp: Date.now()
+            };
+            
+            navigator.geolocation.getCurrentPosition = function(success, error, options) {
+                console.log("[MockGeo] App requested location. Returning Zaragoza.");
+                success(mockLocation);
+            };
+            
+            navigator.geolocation.watchPosition = function(success, error, options) {
+                console.log("[MockGeo] App watching location. Returning Zaragoza.");
+                success(mockLocation);
+                return 42; # Random ID
+            };
+        """)
+        # -------------------------------------------------------------------------
 
         print("Navigating to Bixpe...")
         page.goto("https://worktime.bixpe.com/")
