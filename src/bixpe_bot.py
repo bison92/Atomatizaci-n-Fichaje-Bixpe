@@ -35,7 +35,15 @@ def is_holiday_or_weekend(holidays):
 def run_automation(email, password, action, headless=True, dry_run=False):
     with sync_playwright() as p:
         # Launch with specific args to avoid detection/rendering issues
-        browser = p.chromium.launch(headless=headless, args=["--no-sandbox", "--disable-setuid-sandbox"])
+        browser = p.chromium.launch(
+            headless=headless, 
+            args=[
+                "--no-sandbox", 
+                "--disable-setuid-sandbox",
+                "--disable-blink-features=AutomationControlled" 
+            ],
+            ignore_default_args=["--enable-automation"]
+        )
         
         # Use a standard User-Agent to avoid being blocked as a bot
         # Also grant geolocation permissions as Bixpe might require them to show the clock-in buttons
@@ -43,11 +51,15 @@ def run_automation(email, password, action, headless=True, dry_run=False):
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             permissions=['geolocation'],
             geolocation={'latitude': 40.4168, 'longitude': -3.7038}, # Madrid
-            viewport={'width': 1280, 'height': 720}
+            viewport={'width': 1280, 'height': 720},
+            locale='es-ES'
         )
         page = context.new_page()
         page.set_default_timeout(60000) # Increase default timeout to 60s
         
+        # Capture console logs to debug JS errors
+        page.on("console", lambda msg: print(f"Browser Console: {msg.text}"))
+
         print("Navigating to Bixpe...")
         page.goto("https://worktime.bixpe.com/")
         
@@ -99,7 +111,7 @@ def run_automation(email, password, action, headless=True, dry_run=False):
                         print(f"Filled password using: {selector}")
                         break
                 except:
-                   continue
+                    continue
 
             # Click Login
             clicked = False
@@ -120,7 +132,7 @@ def run_automation(email, password, action, headless=True, dry_run=False):
             
             # Wait for dashboard to load
             try:
-                page.wait_for_load_state("networkidle", timeout=20000)
+                page.wait_for_load_state("networkidle", timeout=30000)
             except:
                 print("Warning: Network idle timeout. Proceeding...")
 
@@ -139,7 +151,7 @@ def run_automation(email, password, action, headless=True, dry_run=False):
         print(f"Performing action: {action}")
         
         # Wait for potential dynamic content
-        page.wait_for_timeout(3000)
+        page.wait_for_timeout(5000)
 
         # DEBUG: Save dashboard HTML to identify buttons
         with open("dashboard_dump.html", "w", encoding="utf-8") as f:
@@ -156,9 +168,6 @@ def run_automation(email, password, action, headless=True, dry_run=False):
                      target_selector = "#btn-resume-working"
                 elif page.is_visible(".fa-play"):
                      target_selector = ".fa-play"
-                else:
-                    print("Could not find Play button. Trying text fallback...")
-                    target_selector = "text=Empieza"
 
             elif action == "PAUSE":
                 print("Attempting to Pause for Lunch (Bowl Icon)")
@@ -170,8 +179,6 @@ def run_automation(email, password, action, headless=True, dry_run=False):
                     target_selector = ".fa-utensils"
                 elif page.is_visible(".fa-cutlery"):
                      target_selector = ".fa-cutlery"
-                elif page.is_visible("text=Pausa"):
-                     target_selector = "text=Pausa"
                 
             elif action == "RESUME":
                 print("Attempting to Resume (Circular Arrow Button)")
@@ -184,6 +191,7 @@ def run_automation(email, password, action, headless=True, dry_run=False):
                 elif page.is_visible(".fa-rotate-right"):
                     target_selector = ".fa-rotate-right"
                 elif page.is_visible("text=Reanudar"):
+                    # Only click text if it looks like a button
                     target_selector = "text=Reanudar"
                 
             elif action == "END":
@@ -192,8 +200,6 @@ def run_automation(email, password, action, headless=True, dry_run=False):
                     target_selector = "#btn-stop-working"
                 elif page.is_visible(".fa-stop"):
                     target_selector = ".fa-stop"
-                elif page.is_visible("text=Finalizar"):
-                    target_selector = "text=Finalizar"
 
             if target_selector:
                 if dry_run:
