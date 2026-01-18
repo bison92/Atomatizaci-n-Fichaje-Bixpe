@@ -245,91 +245,81 @@ def run_automation(email, password, action, headless=True, dry_run=False):
             sys.exit(1)
 
     # Selectors based on Action
-    selectors = []
+    primary_selector = ""
+    fallback_selectors = []
+    
     if action == "START":
-        selectors = [
-            "#btn-start-workday", # ID confirmed from user screenshot
-            ".fa-play", 
-            "button[data-original-title='Empezar']",
-            "text=Empezar"
-        ]
+        primary_selector = "#btn-start-workday"
+        fallback_selectors = [".fa-play", "button[data-original-title='Empezar']"]
     elif action == "PAUSE":
-        selectors = [
-            "#btn-pause-workday", # ID confirmed for "Pausa General"
-            ".fa-pause", 
-            ".fa-utensils", # FontAwesome 5
-            ".fa-cutlery", # FontAwesome 4
-            "button[data-original-title='Pausa General']",
-            "button[data-original-title='Comida']"
-        ]
+        primary_selector = "#btn-pause-workday"
+        fallback_selectors = [".fa-utensils", "button[data-original-title='Pausa General']"]
     elif action == "RESUME":
-        selectors = [
-            "#btn-resume-workday", # Assumed naming convention
-            ".fa-redo",
-            ".fa-sync",
-            ".fa-rotate-right",
-            "button[data-original-title='Reanudar']"
-        ]
+        primary_selector = "#btn-resume-workday"
+        fallback_selectors = [".fa-redo", "button[data-original-title='Reanudar']"]
     elif action == "END":
-        selectors = [
-            "#btn-stop-workday", # ID from CSS/Convention
-            ".fa-stop",
-            ".fa-square", 
-            "button[data-original-title='Finalizar']"
-        ]
+        primary_selector = "#btn-stop-workday"
+        fallback_selectors = [".fa-stop", "button[data-original-title='Finalizar']"]
 
     print(f"Performing action: {action}")
     
     action_button = None
-    for selector in selectors:
-        try:
-            print(f"Looking for selector: {selector}")
-            # Use strict=False to allow fuzzy matching if multiple exist, but prioritize visibility
-            btn = page.locator(selector).first
-            if btn.is_visible(timeout=2000):
-                print(f"Found visible button: {selector}")
-                action_button = btn
-                break
-        except Exception as e:
-            print(f"Selector check failed for {selector}: {e}")
-            continue
+    
+    # 1. Try Primary ID Selector (Most reliable)
+    try:
+        if page.locator(primary_selector).is_visible(timeout=5000):
+            print(f"Found primary selector: {primary_selector}")
+            action_button = page.locator(primary_selector)
+    except Exception as e:
+        print(f"Primary selector check failed: {e}")
+
+    # 2. Try Fallbacks if Primary failed
+    if not action_button:
+        for sel in fallback_selectors:
+            try:
+                if page.locator(sel).first.is_visible(timeout=2000):
+                    print(f"Found fallback selector: {sel}")
+                    action_button = page.locator(sel).first
+                    break
+            except Exception as e:
+                print(f"Fallback check failed for {sel}: {e}")
 
     if action_button:
         try:
             # 1. Click the main action button
-            print(f"Attempting to Click: {selector}")
+            print(f"Attempting to Click: {action_button}")
+            # Ensure page is not closed
+            if page.is_closed():
+                raise Exception("Page is closed before click.")
+                
             action_button.click(timeout=5000)
-            print(f"Clicked: {selector}")
+            print("Clicked main action button.")
             
             # 2. HANDLE CONFIRMATION DIALOG (SweetAlert)
-            # The user reported a popup asking "Are you sure?"
             print("Checking for confirmation dialog...")
-            time.sleep(2) # Short wait for animation
-            
-            # Look for specific confirm buttons based on the action context
-            # Common text: "Sí, iniciar", "Sí, finalizar", "Sí, pausar"
-            # Or generic SweetAlert selector: button.confirm
+            # Wait for potential popup
+            page.wait_for_timeout(2000)
             
             confirm_selectors = [
-                "button.confirm", # Generic SweetAlert confirm class
-                "button:has-text('Sí, iniciar')",
-                "button:has-text('Sí, finalizar')",
-                "button:has-text('Sí, pausar')",
-                "button:has-text('Sí, reanudar')", # Guessing reanudar
-                "div.sweet-alert.visible button.confirm" # More specific
+                "button.confirm", 
+                "button.btn-primary", # Often the confirm button styles
+                "div.sweet-alert button.confirm"
             ]
             
             confirmed = False
             for conf_sel in confirm_selectors:
-                if page.locator(conf_sel).is_visible():
-                    print(f"Confirmation dialog found! Clicking: {conf_sel}")
-                    page.locator(conf_sel).click()
-                    confirmed = True
-                    print("Confirmation clicked.")
-                    break
+                try:
+                    if page.locator(conf_sel).is_visible(timeout=3000):
+                        print(f"Confirmation dialog found! Clicking: {conf_sel}")
+                        page.locator(conf_sel).click()
+                        confirmed = True
+                        print("Confirmation clicked.")
+                        break
+                except:
+                    continue
             
             if not confirmed:
-                print("No confirmation dialog detected, or it auto-closed.")
+                print("No active confirmation dialog found (maybe none needed or auto-closed).")
 
             # Final check -> Screenshot after action
             page.wait_for_timeout(3000)
@@ -337,31 +327,29 @@ def run_automation(email, password, action, headless=True, dry_run=False):
             return True
 
         except Exception as e:
-            print(f"Error clicking button {selector}: {e}")
-            # Try JS click as fallback if standard click fails
+            print(f"Error performing action interaction: {e}")
+            # Last ditch effort: JS Click on the main button if Python click failed
             try:
-                print("Attempting JS click...")
-                page.evaluate("el => el.click()", action_button.element_handle())
-                
-                # Check confirmation again after JS click
-                time.sleep(2)
-                if page.locator("button.confirm").is_visible():
-                     page.locator("button.confirm").click()
-                     print("Confirmation clicked (after JS click).")
-
+                print("Attempting forced JS click on main button...")
+                page.evaluate("document.querySelector(arguments[0]).click()", primary_selector)
+                # Quick confirm check for JS route
+                page.wait_for_timeout(1500)
+                page.evaluate("if(document.querySelector('button.confirm')) document.querySelector('button.confirm').click()")
                 return True
             except Exception as js_e:
-                 print(f"JS Click also failed: {js_e}")
+                 print(f"JS Force Click failed: {js_e}")
     
     else:
         print(f"Error: No suitable button found for action {action}")
-        # Debug: Dump HTML to see what's wrong
-        with open(f"debug_fail_{action}.html", "w", encoding="utf-8") as f:
-            f.write(page.content())
-        print(f"Saved debug_fail_{action}.html with page content.")
+        try:
+            # Debug: Dump HTML to see what's wrong
+            with open(f"debug_fail_{action}.html", "w", encoding="utf-8") as f:
+                f.write(page.content())
+            print(f"Saved debug_fail_{action}.html")
+            page.screenshot(path=f"error_{action}.png", full_page=True)
+        except Exception as file_e:
+            print(f"Could not save debug info (page likely closed): {file_e}")
         
-        # New: Take full page screenshot on failure
-        page.screenshot(path=f"error_{action}.png", full_page=True)
         sys.exit(1)
         # Wait for potential dynamic content
         page.wait_for_timeout(5000)
