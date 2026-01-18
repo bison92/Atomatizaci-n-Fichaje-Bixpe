@@ -27,9 +27,9 @@ jobs:
           BIXPE_PASSWORD: ${{ secrets.BIXPE_PASSWORD }}
         run: python src/bixpe_bot.py --action START --force
 
-      # Wait 60s
-      - name: Wait 1 minute
-        run: sleep 60
+      # Wait 5s
+      - name: Wait 5 seconds
+        run: sleep 5
 
       # 2. PAUSE
       - name: TEST Pause (Force)
@@ -38,9 +38,9 @@ jobs:
           BIXPE_PASSWORD: ${{ secrets.BIXPE_PASSWORD }}
         run: python src/bixpe_bot.py --action PAUSE --force
 
-      # Wait 60s
-      - name: Wait 1 minute
-        run: sleep 60
+      # Wait 5s
+      - name: Wait 5 seconds
+        run: sleep 5
 
       # 3. RESUME
       - name: TEST Resume (Force)
@@ -49,9 +49,9 @@ jobs:
           BIXPE_PASSWORD: ${{ secrets.BIXPE_PASSWORD }}
         run: python src/bixpe_bot.py --action RESUME --force
 
-      # Wait 60s
-      - name: Wait 1 minute
-        run: sleep 60
+      # Wait 5s
+      - name: Wait 5 seconds
+        run: sleep 5
 
       # 4. END
       - name: TEST End (Force)
