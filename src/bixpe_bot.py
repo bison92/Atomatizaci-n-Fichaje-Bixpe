@@ -34,16 +34,36 @@ def is_holiday_or_weekend(holidays):
 
 def run_automation(email, password, action, headless=True, dry_run=False):
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless)
-        context = browser.new_context()
+        # Launch with specific args to avoid detection/rendering issues
+        browser = p.chromium.launch(headless=headless, args=["--no-sandbox", "--disable-setuid-sandbox"])
+        
+        # Use a standard User-Agent to avoid being blocked as a bot
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
         page = context.new_page()
+        page.set_default_timeout(60000) # Increase default timeout to 60s
         
         print("Navigating to Bixpe...")
         page.goto("https://worktime.bixpe.com/")
         
+        # Handle Cookies if present
+        try:
+            if page.is_visible("text=Aceptar todas", timeout=5000):
+                page.click("text=Aceptar todas")
+            elif page.is_visible("text=Aceptar", timeout=5000):
+                page.click("text=Aceptar")
+            elif page.is_visible("button[id*='cookie']", timeout=5000):
+                 page.click("button[id*='cookie']")
+        except:
+            pass # Ignore if no cookies found
+            
         # Login
         print("Logging in...")
         try:
+            # Wait explicitly for the username field
+            page.wait_for_selector('#UserName', state='visible')
+
             # Selectors identified from user screenshots
             # Email field has id="UserName"
             page.fill('#UserName', email)
@@ -56,12 +76,14 @@ def run_automation(email, password, action, headless=True, dry_run=False):
             
             # Wait for dashboard to load
             try:
-                page.wait_for_load_state("networkidle", timeout=10000)
+                page.wait_for_load_state("networkidle", timeout=20000)
             except:
                 print("Warning: Network idle timeout. Proceeding...")
 
         except Exception as e:
             print(f"Error during login: {e}")
+            print(f"Current URL: {page.url}")
+            print(f"Page Title: {page.title()}")
             page.screenshot(path="error_login.png")
             # Dump HTML for debugging
             with open("debug_login.html", "w", encoding="utf-8") as f:
