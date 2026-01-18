@@ -1,0 +1,15 @@
+{
+    "mon_thu": {
+        "start": "08:30",
+        "break_start": "14:00",
+        "break_end": "15:00",
+        "end": "18:00"
+    },
+    "friday": {
+        "start": "08:00",
+        "break_start": null,
+        "break_end": null,
+        "end": "14:00"
+    },
+    "timezone": "Europe/Madrid"
+}

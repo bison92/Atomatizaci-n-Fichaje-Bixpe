@@ -1,0 +1,69 @@
+name: TEST Full Cycle (Manual)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  full-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+
+      # 1. START
+      - name: TEST Start (Force)
+        env:
+          BIXPE_EMAIL: ${{ secrets.BIXPE_EMAIL }}
+          BIXPE_PASSWORD: ${{ secrets.BIXPE_PASSWORD }}
+        run: python src/bixpe_bot.py --action START --force
+
+      # Wait 60s
+      - name: Wait 1 minute
+        run: sleep 60
+
+      # 2. PAUSE
+      - name: TEST Pause (Force)
+        env:
+          BIXPE_EMAIL: ${{ secrets.BIXPE_EMAIL }}
+          BIXPE_PASSWORD: ${{ secrets.BIXPE_PASSWORD }}
+        run: python src/bixpe_bot.py --action PAUSE --force
+
+      # Wait 60s
+      - name: Wait 1 minute
+        run: sleep 60
+
+      # 3. RESUME
+      - name: TEST Resume (Force)
+        env:
+          BIXPE_EMAIL: ${{ secrets.BIXPE_EMAIL }}
+          BIXPE_PASSWORD: ${{ secrets.BIXPE_PASSWORD }}
+        run: python src/bixpe_bot.py --action RESUME --force
+
+      # Wait 60s
+      - name: Wait 1 minute
+        run: sleep 60
+
+      # 4. END
+      - name: TEST End (Force)
+        env:
+          BIXPE_EMAIL: ${{ secrets.BIXPE_EMAIL }}
+          BIXPE_PASSWORD: ${{ secrets.BIXPE_PASSWORD }}
+        run: python src/bixpe_bot.py --action END --force
+
+      # Upload all screenshots
+      - name: Upload Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-screenshots
+          path: "*.png"
