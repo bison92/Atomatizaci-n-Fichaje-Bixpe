@@ -227,10 +227,19 @@ def run_automation(email, password, action, headless=True, dry_run=False):
                  print("Pressed Enter to login")
             
             # Wait for dashboard to load
+            print("Waiting for dashboard to load (networkidle)...")
             try:
                 page.wait_for_load_state("networkidle", timeout=30000)
+                print("Network idle reached.")
             except:
                 print("Warning: Network idle timeout. Proceeding...")
+            
+            # Explicit safety sleep to prevent crashes on dynamic loads
+            print("Sleeping 10s to ensure dashboard stability...")
+            time.sleep(10)
+            print("Login wait finished. Checking URL...")
+            print(f"Post-login URL: {page.url}")
+
 
         except Exception as e:
             print(f"Error during login: {e}")
