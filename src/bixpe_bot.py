@@ -162,6 +162,10 @@ def run_automation(email, password, action, headless=True, dry_run=False):
                     target_selector = "#btn-food-working"
                 elif page.is_visible("#btn-pause-working"):
                     target_selector = "#btn-pause-working"
+                elif page.is_visible(".fa-utensils"):
+                    target_selector = ".fa-utensils"
+                elif page.is_visible(".fa-cutlery"):
+                     target_selector = ".fa-cutlery"
                 elif page.is_visible("text=Pausa"):
                      target_selector = "text=Pausa"
                 
@@ -200,6 +204,12 @@ def run_automation(email, password, action, headless=True, dry_run=False):
                     page.wait_for_timeout(5000)
             else:
                  print(f"Error: No suitable button found for action {action}")
+                 # Dump HTML for debugging
+                 debug_file = f"debug_fail_{action}.html"
+                 with open(debug_file, "w", encoding="utf-8") as f:
+                    f.write(page.content())
+                 print(f"Saved {debug_file} with page content.")
+                 
                  if not dry_run: # Don't exit on dry run, just finish
                     sys.exit(1)
             
