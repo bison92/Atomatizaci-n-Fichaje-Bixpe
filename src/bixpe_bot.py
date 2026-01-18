@@ -62,9 +62,11 @@ def run_automation(email, password, action, headless=True, dry_run=False):
         print("Logging in...")
         try:
             # Wait explicitly for the username field with multiple potential selectors
-            email_selectors = ['#UserName', 'input[name="UserName"]', 'input[type="email"]', 'input[id*="user"]']
-            password_selectors = ['input[type="password"]', 'input[name="Password"]', '#Password']
-            submit_selectors = ['text=INICIAR SESIÓN', 'button[type="submit"]', 'text=Entrar', 'text=Login']
+            # HTML source confirms id="Username" and name="Username" (Case sensitive!)
+            # Also type is "text", not "email".
+            email_selectors = ['#Username', 'input[name="Username"]', 'input[placeholder="Email"]', '#username']
+            password_selectors = ['#Password', 'input[name="Password"]', 'input[type="password"]']
+            submit_selectors = ['button[type="submit"]', 'text=Iniciar sesión', 'text=INICIAR SESIÓN']
             
             # Fill Email
             email_filled = False
@@ -81,7 +83,9 @@ def run_automation(email, password, action, headless=True, dry_run=False):
             if not email_filled:
                 print("Could not find email field. Dumping HTML snippet...")
                 print(page.inner_html("body")[:500])
-                raise Exception("Email field not found")
+                # Screenshot for debug
+                page.screenshot(path="debug_no_email.png")
+                raise Exception("Email field not found. Checked: " + ", ".join(email_selectors))
 
             # Fill Password
             for selector in password_selectors:
