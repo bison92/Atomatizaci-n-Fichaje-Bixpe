@@ -1,9 +1,15 @@
 import os
 import sys
 import json
+import time
 import argparse
 from datetime import datetime, date
 from playwright.sync_api import sync_playwright
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass # In CI/CD dotenv might not be needed/installed, or managed differently
 
 def load_holidays(json_path):
     """Loads holidays from the JSON file."""
@@ -33,7 +39,8 @@ def is_holiday_or_weekend(holidays):
     return False
 
 def run_automation(email, password, action, headless=True, dry_run=False):
-    with sync_playwright() as p:
+    p = sync_playwright().start()
+    try:
         # Launch with specific args to avoid detection/rendering issues
         browser = p.chromium.launch(
             headless=headless, 
@@ -63,98 +70,22 @@ def run_automation(email, password, action, headless=True, dry_run=False):
         # Capture network failures to identify sources
         page.on("requestfailed", lambda request: print(f"Request failed: {request.url} - {request.failure}"))
         
-        # -------------------------------------------------------------------------
-        # NETWORK INTERCEPTION: Block problematic scripts
-        # 1. Block Google Maps (real script) so the app uses our Mock
-        # 2. Block trackers/analytics to speed up load and avoid noise
-        # -------------------------------------------------------------------------
-        def block_routes(route):
-            route.abort()
+        # Capture console logs to debug JS errors
+        page.on("console", lambda msg: print(f"Browser Console: {msg.text}"))
+        
+        # Capture network failures to identify sources
+        page.on("requestfailed", lambda request: print(f"Request failed: {request.url} - {request.failure}"))
+        
+        # (Network blocking removed for stability)
 
-        # Block Maps, Analytics, Facebook, etc.
-        page.route("**/*maps.googleapis.com*", block_routes)
-        page.route("**/*analytics*", block_routes)
-        page.route("**/*facebook*", block_routes)
-        page.route("**/*cookie-script*", block_routes)
         
         # -------------------------------------------------------------------------
         # JS INJECTION: Override Geolocation API & Google Maps Mock
         # -------------------------------------------------------------------------
-        page.add_init_script("""
-            // 1. Mock Geolocation
-            const mockLocation = {
-                coords: {
-                    latitude: 41.651304749576475,
-                    longitude: -0.9345988765123099,
-                    accuracy: 10,
-                    altitude: null,
-                    altitudeAccuracy: null,
-                    heading: null,
-                    speed: null
-                },
-                timestamp: Date.now()
-            };
-            
-            navigator.geolocation.getCurrentPosition = function(success, error, options) {
-                console.log("[MockGeo] App requested location. Returning Zaragoza.");
-                success(mockLocation);
-            };
-            
-            navigator.geolocation.watchPosition = function(success, error, options) {
-                console.log("[MockGeo] App watching location. Returning Zaragoza.");
-                success(mockLocation);
-                return 42; 
-            };
-            
-            // 2. Mock Google Maps to survive 403/Block
-            window.google = window.google || {};
-            window.google.maps = window.google.maps || {
-                Geocoder: function() { 
-                    return { 
-                        geocode: function(req, cb) { 
-                            console.log("[MockMaps] Geocode requested. Returning success.");
-                            cb([{ geometry: { location: { lat: () => 41.65, lng: () => -0.93 } } }], 'OK'); 
-                        } 
-                    }; 
-                },
-                Map: function() { console.log("[MockMaps] Map initialized."); },
-                Marker: function() {},
-                LatLng: function(lat, lng) { return { lat: lat, lng: lng }; },
-                Animation: {},
-                MapTypeId: { ROADMAP: 'roadmap' }
-            };
-        """)
+        # (Init script removed for debugging)
         # -------------------------------------------------------------------------
         # -------------------------------------------------------------------------
-        # JS INJECTION: Override Geolocation API to bypass generic 403 blocks
-        # This mocks the API so it returns success immediately without network check
-        # -------------------------------------------------------------------------
-        page.add_init_script("""
-            const mockLocation = {
-                coords: {
-                    latitude: 41.651304749576475,
-                    longitude: -0.9345988765123099,
-                    accuracy: 10,
-                    altitude: null,
-                    altitudeAccuracy: null,
-                    heading: null,
-                    speed: null
-                },
-                timestamp: Date.now()
-            };
-            
-            navigator.geolocation.getCurrentPosition = function(success, error, options) {
-                console.log("[MockGeo] App requested location. Returning Zaragoza.");
-                success(mockLocation);
-            };
-            
-            navigator.geolocation.watchPosition = function(success, error, options) {
-                console.log("[MockGeo] App watching location. Returning Zaragoza.");
-                success(mockLocation);
-                return 42; # Random ID
-            };
-        """)
-        # -------------------------------------------------------------------------
+
 
         print("Navigating to Bixpe...")
         page.goto("https://worktime.bixpe.com/")
@@ -173,12 +104,11 @@ def run_automation(email, password, action, headless=True, dry_run=False):
         # Login
         print("Logging in...")
         try:
-            # Wait explicitly for the username field with multiple potential selectors
-            # HTML source confirms id="Username" and name="Username" (Case sensitive!)
-            # Also type is "text", not "email".
-            email_selectors = ['#Username', 'input[name="Username"]', 'input[placeholder="Email"]', '#username']
-            password_selectors = ['#Password', 'input[name="Password"]', 'input[type="password"]']
-            submit_selectors = ['button[type="submit"]', 'text=Iniciar sesión', 'text=INICIAR SESIÓN']
+            # HTML source confirms id="emailLogin" and id="passwordLogin" per user docs
+            # Fallbacks kept just in case, but prioritized
+            email_selectors = ['#emailLogin', '#Username', 'input[name="Username"]', 'input[placeholder="Email"]']
+            password_selectors = ['#passwordLogin', '#Password', 'input[name="Password"]']
+            submit_selectors = ['#btn-loginSubmit', 'button[type="submit"]', 'text=Iniciar sesión']
             
             # Fill Email
             email_filled = False
@@ -235,8 +165,8 @@ def run_automation(email, password, action, headless=True, dry_run=False):
                 print("Warning: Network idle timeout. Proceeding...")
             
             # Explicit safety sleep to prevent crashes on dynamic loads
-            print("Sleeping 10s to ensure dashboard stability...")
-            time.sleep(10)
+            print("Sleeping 10s (via Playwright) to ensure dashboard stability...")
+            page.wait_for_timeout(10000)
             print("Login wait finished. Checking URL...")
             print(f"Post-login URL: {page.url}")
 
@@ -250,208 +180,226 @@ def run_automation(email, password, action, headless=True, dry_run=False):
             with open("debug_login.html", "w", encoding="utf-8") as f:
                 f.write(page.content())
             print("Saved debug_login.html. Please verify selectors.")
-            browser.close()
+            # Cleanup handled in finally block
             sys.exit(1)
+    finally:
+        pass  # Ensures try block is properly closed
 
     # Selectors based on Action
-    primary_selector = ""
-    fallback_selectors = []
-    
-    if action == "START":
-        primary_selector = "#btn-start-workday"
-        fallback_selectors = [".fa-play", "button[data-original-title='Empezar']"]
-    elif action == "PAUSE":
-        primary_selector = "#btn-pause-workday"
-        fallback_selectors = [".fa-utensils", "button[data-original-title='Pausa General']"]
-    elif action == "RESUME":
-        primary_selector = "#btn-resume-workday"
-        fallback_selectors = [".fa-redo", "button[data-original-title='Reanudar']"]
-    elif action == "END":
-        primary_selector = "#btn-stop-workday"
-        fallback_selectors = [".fa-stop", "button[data-original-title='Finalizar']"]
-
     print(f"Performing action: {action}")
     
-    action_button = None
+    # Define selector lists
+    # Define selector lists per User Documentation
+    # START: #btn-start-workday (Modal: Yes/Cancel)
+    # PAUSE: #btn-lunch-pause (No Modal)
+    # RESUME: #btn-resume-workday (No Modal)
+    # END: #btn-stop-workday (Modal: Yes/Cancel)
     
-    # 1. Try Primary ID Selector (Most reliable)
-    try:
-        if page.locator(primary_selector).is_visible(timeout=5000):
-            print(f"Found primary selector: {primary_selector}")
-            action_button = page.locator(primary_selector)
-    except Exception as e:
-        print(f"Primary selector check failed: {e}")
-
-    # 2. Try Fallbacks if Primary failed
-    if not action_button:
-        for sel in fallback_selectors:
-            try:
-                if page.locator(sel).first.is_visible(timeout=2000):
-                    print(f"Found fallback selector: {sel}")
-                    action_button = page.locator(sel).first
+    selectors_map = {
+        "START": ["#btn-start-workday", "button[title='Empezar']", ".fa-play"],
+        "PAUSE": ["#btn-lunch-pause", "#btn-pause-workday", "button[title='Pausa']", ".fa-utensils"],
+        "RESUME": ["#btn-resume-workday", "button[title='Reanudar']", ".fa-redo"],
+        "END": ["#btn-stop-workday", "button[title='Finalizar']", ".fa-stop"]
+    }
+    
+    target_selectors = selectors_map.get(action, [])
+    
+    # 1. FIND THE BUTTON
+    found_selector = None
+    for sel in target_selectors:
+        try:
+            # Quick check if it exists in DOM
+            if page.evaluate(f"!!document.querySelector('{sel}')"):
+                print(f"Selector found in DOM: {sel}")
+                # Check visibility
+                if page.is_visible(sel):
+                    print(f"Selector is visible: {sel}")
+                    found_selector = sel
                     break
-            except Exception as e:
-                print(f"Fallback check failed for {sel}: {e}")
-
-    if action_button:
-        try:
-            # 1. Click the main action button
-            print(f"Attempting to Click: {action_button}")
-            # Ensure page is not closed
-            if page.is_closed():
-                raise Exception("Page is closed before click.")
-                
-            action_button.click(timeout=5000)
-            print("Clicked main action button.")
-            
-            # 2. HANDLE CONFIRMATION DIALOG (SweetAlert)
-            print("Checking for confirmation dialog...")
-            # Wait for potential popup
-            page.wait_for_timeout(2000)
-            
-            confirm_selectors = [
-                "button.confirm", 
-                "button.btn-primary", # Often the confirm button styles
-                "div.sweet-alert button.confirm"
-            ]
-            
-            confirmed = False
-            for conf_sel in confirm_selectors:
-                try:
-                    if page.locator(conf_sel).is_visible(timeout=3000):
-                        print(f"Confirmation dialog found! Clicking: {conf_sel}")
-                        page.locator(conf_sel).click()
-                        confirmed = True
-                        print("Confirmation clicked.")
-                        break
-                except:
-                    continue
-            
-            if not confirmed:
-                print("No active confirmation dialog found (maybe none needed or auto-closed).")
-
-            # Final check -> Screenshot after action
-            page.wait_for_timeout(3000)
-            page.screenshot(path=f"screenshot_{action}_{time.strftime('%Y%m%d_%H%M%S')}.png")
-            return True
-
+                else:
+                    print(f"Selector exists but hidden: {sel}")
         except Exception as e:
-            print(f"Error performing action interaction: {e}")
-            # Last ditch effort: JS Click on the main button if Python click failed
-            try:
-                print("Attempting forced JS click on main button...")
-                page.evaluate("document.querySelector(arguments[0]).click()", primary_selector)
-                # Quick confirm check for JS route
-                page.wait_for_timeout(1500)
-                page.evaluate("if(document.querySelector('button.confirm')) document.querySelector('button.confirm').click()")
-                return True
-            except Exception as js_e:
-                 print(f"JS Force Click failed: {js_e}")
-    
-    else:
-        print(f"Error: No suitable button found for action {action}")
+            print(f"Check failed for {sel}: {e}")
+            
+    if not found_selector:
+        print(f"ERROR: Target button for {action} not found.")
+        print("--- DOM PROBE: VISIBLE BUTTONS ---")
         try:
-            # Debug: Dump HTML to see what's wrong
+            # JavaScript to extract details of all visible buttons
+            buttons_info = page.evaluate("""() => {
+                return Array.from(document.querySelectorAll('button, a.btn, div.btn')).map(el => {
+                    const rect = el.getBoundingClientRect();
+                    const isVisible = rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).visibility !== 'hidden';
+                    return {
+                        tag: el.tagName,
+                        id: el.id,
+                        className: el.className,
+                        text: el.innerText.substring(0, 20).replace(/\\n/g, ''),
+                        visible: isVisible
+                    };
+                }).filter(b => b.visible);
+            }""")
+            
+            for b in buttons_info:
+                print(f"Found: <{b['tag']} id='{b['id']}' class='{b['className']}'> Text: '{b['text']}'")
+                
+        except Exception as e:
+            print(f"DOM Probe failed: {e}")
+            
+        print("--------------------------------")
+
+        # Emergency dump
+        print("Dumping HTML...")
+        try:
             with open(f"debug_fail_{action}.html", "w", encoding="utf-8") as f:
                 f.write(page.content())
             print(f"Saved debug_fail_{action}.html")
-            page.screenshot(path=f"error_{action}.png", full_page=True)
-        except Exception as file_e:
-            print(f"Could not save debug info (page likely closed): {file_e}")
-        
-        sys.exit(1)
-        # Wait for potential dynamic content
-        page.wait_for_timeout(5000)
-
-        # DEBUG: Save dashboard HTML to identify buttons
-        with open("dashboard_dump.html", "w", encoding="utf-8") as f:
-            f.write(page.content())
-        
-        try:
-            target_selector = None
-            
-            if action == "START":
-                print("Attempting to Start Journey (Green Play Button)")
-                if page.is_visible("#btn-start-working"):
-                     target_selector = "#btn-start-working"
-                elif page.is_visible("#btn-resume-working"):
-                     target_selector = "#btn-resume-working"
-                elif page.is_visible(".fa-play"):
-                     target_selector = ".fa-play"
-
-            elif action == "PAUSE":
-                print("Attempting to Pause for Lunch (Bowl Icon)")
-                if page.is_visible("#btn-food-working"):
-                    target_selector = "#btn-food-working"
-                elif page.is_visible("#btn-pause-working"):
-                    target_selector = "#btn-pause-working"
-                elif page.is_visible(".fa-utensils"):
-                    target_selector = ".fa-utensils"
-                elif page.is_visible(".fa-cutlery"):
-                     target_selector = ".fa-cutlery"
-                
-            elif action == "RESUME":
-                print("Attempting to Resume (Circular Arrow Button)")
-                if page.is_visible("#btn-resume-working"):
-                     target_selector = "#btn-resume-working"
-                elif page.is_visible(".fa-redo"):
-                    target_selector = ".fa-redo"
-                elif page.is_visible(".fa-sync"):
-                    target_selector = ".fa-sync"
-                elif page.is_visible(".fa-rotate-right"):
-                    target_selector = ".fa-rotate-right"
-                elif page.is_visible("text=Reanudar"):
-                    # Only click text if it looks like a button
-                    target_selector = "text=Reanudar"
-                
-            elif action == "END":
-                print("Attempting to End Journey (Red Stop Button)")
-                if page.is_visible("#btn-stop-working"):
-                    target_selector = "#btn-stop-working"
-                elif page.is_visible(".fa-stop"):
-                    target_selector = ".fa-stop"
-
-            if target_selector:
-                if dry_run:
-                    print(f"[DRY-RUN] Would have clicked: {target_selector}")
-                    # Highlight for visual confirmation
-                    page.eval_on_selector(target_selector, "el => el.style.border = '5px solid red'")
-                    page.wait_for_timeout(3000) # Give user time to see it
-                else:
-                    page.click(target_selector)
-                    print(f"Clicked: {target_selector}")
-                    # Wait a bit for action to record
-                    page.wait_for_timeout(5000)
-            else:
-                 print(f"Error: No suitable button found for action {action}")
-                 # Dump HTML for debugging
-                 debug_file = f"debug_fail_{action}.html"
-                 with open(debug_file, "w", encoding="utf-8") as f:
-                    f.write(page.content())
-                 print(f"Saved {debug_file} with page content.")
-                 
-                 if not dry_run: # Don't exit on dry run, just finish
-                    sys.exit(1)
-            
-            # Take confirmation screenshot
-            screenshot_path = f"screenshot_{action}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-            page.screenshot(path=screenshot_path)
-            print(f"Screenshot saved to {screenshot_path}")
-
         except Exception as e:
-            print(f"Error executing action {action}: {e}")
-            page.screenshot(path=f"error_{action}.png")
-            sys.exit(1)
+            print(f"Could not save HTML dump: {e}")
+            
+        page.screenshot(path=f"error_no_btn_{action}.png")
+        if not dry_run:
+             sys.exit(1)
 
+    # ---------------------------------------------------------
+    # DIAGNOSTIC CHECKLIST (Per User Request)
+    # ---------------------------------------------------------
+    print("\n--- PRE-CLICK DIAGNOSTIC CHECKLIST ---")
+    
+    # 1. Overlay Check
+    try:
+        overlay_visible = page.evaluate("() => { const el = document.querySelector('#processing-text'); return el && (el.offsetWidth > 0 || window.getComputedStyle(el).display !== 'none'); }")
+        print(f"[Check 1] Overlay '#processing-text' visible? {overlay_visible}")
+    except:
+        print("[Check 1] Overlay '#processing-text' not found in DOM.")
+
+    # 2. Target Button Properties
+    if found_selector:
+        try:
+            btn_info = page.evaluate(f"""() => {{
+                const el = document.querySelector('{found_selector}');
+                if (!el) return null;
+                const rect = el.getBoundingClientRect();
+                
+                // Check what element is at the button's center (Click Interception Check)
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const topEl = document.elementFromPoint(centerX, centerY);
+                
+                return {{
+                    tagName: el.tagName,
+                    display: window.getComputedStyle(el).display,
+                    visibility: window.getComputedStyle(el).visibility,
+                    rect: rect,
+                    opacity: window.getComputedStyle(el).opacity,
+                    coveredBy: topEl ? (topEl.id || topEl.className || topEl.tagName) : 'None'
+                }};
+            }}""")
+            
+            if btn_info:
+                print(f"[Check 2] Button Tag: {btn_info['tagName']} (Expected: DIV or BUTTON)")
+                print(f"[Check 3] Visibility: {btn_info['display']} / {btn_info['visibility']} / Opacity: {btn_info['opacity']}")
+                print(f"[Check 4] Dimensions: {btn_info['rect']}")
+                print(f"[Check 5] Element at Click Point: {btn_info['coveredBy']}")
+                
+                if btn_info['coveredBy'] and btn_info['coveredBy'] not in found_selector:
+                     print(f"    WARNING: Button might be covered by '{btn_info['coveredBy']}'!")
+            else:
+                print("[Check 2] Button info could not be retrieved.")
+        except Exception as e:
+            print(f"Diagnostic failed: {e}")
+    print("------------------------------------------\n")
+
+    # 2. CLICK THE BUTTON
+    # IMPLEMENTING TECHNICAL FIXES (Strategies A, B, C)
+    try:
+        # Strategy A: Smart Wait for "Ghost Layer"
+        print("Strategy A: Waiting for '#processing-text' overlay to disappear...")
+        try:
+            # Wait short time for it to possibly appear/disappear
+            page.wait_for_selector("#processing-text", state="hidden", timeout=5000)
+            print("Overlay cleared.")
+        except Exception as e:
+            print(f"Overlay wait warning (might not exist): {e}")
+
+        # Strategy C: The "Nuclear Option" (JavaScript Dispatch)
+        # We prioritize this because the element is a DIV and might have tooltips/overlays
+        print(f"Strategy C: Attempting JS Click on: {found_selector}")
+        page.evaluate(f"document.querySelector('{found_selector}').click()")
+        print("JS click command sent.")
+        
+        # Fallback Strategy B: Force Click if JS didn't trigger navigation/modal
+        # We wait a split second to see if something happens
+        time.sleep(1)
+        
+    except Exception as e:
+        print(f"Fatal error clicking button: {e}")
+
+    # Continue to confirmation check
+        # Don't exit yet, check if confirm appeared anyway
+
+    # 3. HANDLE CONFIRMATION (Only for START and END)
+    if action in ["START", "END"]:
+        print("Checking for confirmation dialog...")
+        time.sleep(1) # Slight delay for modal animation
+        
+        # Decide whether to Confirm or Cancel based on Simulation Mode
+        if dry_run: # Simulation mode requested by user
+             print("[SIMULATION] Simulation mode active. searching for CANCEL button...")
+             # Look for swal2-cancel or general cancel
+             confirm_selector_js = "button.swal2-cancel, button.cancel"
+             action_verb = "CANCELLED"
+        else:
+             print("Check for CONFIRM button...")
+             # Look for swal2-confirm or general confirm
+             confirm_selector_js = "button.swal2-confirm, button.confirm"
+             action_verb = "CONFIRMED"
+
+        confirm_script = f"""
+            (() => {{
+                const btns = document.querySelectorAll('{confirm_selector_js}');
+                for (const btn of btns) {{
+                    if (btn.offsetParent !== null) {{
+                        btn.click();
+                        return true;
+                    }}
+                }}
+                return false;
+            }})()
+        """
+        try:
+            if page.evaluate(confirm_script):
+                print(f"Confirmation dialog {action_verb} successfully.")
+                time.sleep(2)
+            else:
+                print("No confirmation dialog found (or not needed).")
+        except Exception as e:
+            print(f"Confirmation check error: {e}")
+    else:
+        print(f"Action {action} requires no confirmation interaction.")
+
+    # Success Screenshot
+    page.screenshot(path=f"screenshot_{action}_{time.strftime('%Y%m%d_%H%M%S')}.png")
+    
+    # Cleanup resources
+    try:
         browser.close()
+    except:
+        pass
+    p.stop()
+    return True
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--action", choices=["START", "PAUSE", "RESUME", "END"], required=True)
     parser.add_argument("--visible", action="store_true", help="Run with visible browser for debugging")
     parser.add_argument("--force", action="store_true", help="Ignore schedule and holiday checks")
-    parser.add_argument("--dry-run", action="store_true", help="Perform login/nav but do not click final action button")
+    parser.add_argument("--simulate", action="store_true", help="Perform login/nav, click action, but CANCEL the confirmation modal.")
+    parser.add_argument("--dry-run", action="store_true", help="(Legacy) Alias for --simulate")
     args = parser.parse_args()
+    
+    # Unify simulation flags
+    is_simulation = args.simulate or args.dry_run
 
     # Load holidays
     holidays_file = os.path.join(os.path.dirname(__file__), "..", "holidays.json")
@@ -507,5 +455,5 @@ if __name__ == "__main__":
         print("Error: BIXPE_EMAIL and BIXPE_PASSWORD environment variables must be set.")
         sys.exit(1)
 
-    run_automation(email, password, args.action, headless=not args.visible, dry_run=args.dry_run)
+    run_automation(email, password, args.action, headless=not args.visible, dry_run=is_simulation)
 

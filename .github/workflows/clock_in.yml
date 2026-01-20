@@ -18,22 +18,37 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
           playwright install chromium
+          playwright install-deps chromium
 
       - name: Run Clock In
         env:
           BIXPE_EMAIL: ${{ secrets.BIXPE_EMAIL }}
           BIXPE_PASSWORD: ${{ secrets.BIXPE_PASSWORD }}
-        run: python src/bixpe_bot.py --action START
+        run: |
+          echo "=== Starting Clock In at $(date) ==="
+          python src/bixpe_bot.py --action START --force
+          echo "=== Finished Clock In at $(date) ==="
 
-      - name: Upload Screenshot
+      - name: Upload Screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshot-start
+          name: screenshot-start-${{ github.run_id }}
           path: "*.png"
+          retention-days: 7
+
+      - name: Upload Debug Files
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-start-${{ github.run_id }}
+          path: |
+            *.html
+            *.png
+          retention-days: 7
