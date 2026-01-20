@@ -338,8 +338,8 @@ def run_automation(email, password, action, headless=True, dry_run=False):
     # Continue to confirmation check
         # Don't exit yet, check if confirm appeared anyway
 
-    # 3. HANDLE CONFIRMATION (Only for START and END)
-    if action in ["START", "END"]:
+    # 3. HANDLE CONFIRMATION (START, PAUSE, and END require confirmation)
+    if action in ["START", "PAUSE", "END"]:
         print("Checking for confirmation dialog...")
         time.sleep(1) # Slight delay for modal animation
         
