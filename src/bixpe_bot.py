@@ -195,11 +195,12 @@ def run_automation(email, password, action, headless=True, dry_run=False):
     # RESUME: #btn-resume-workday (No Modal)
     # END: #btn-stop-workday (Modal: Yes/Cancel)
     
+    # IMPORTANT: Only use button/div selectors, NOT SVG icons (.fa-*) as they don't have .click()
     selectors_map = {
-        "START": ["#btn-start-workday", "button[title='Empezar']", ".fa-play"],
-        "PAUSE": ["#btn-lunch-pause", "#btn-pause-workday", "button[title='Pausa']", ".fa-utensils"],
-        "RESUME": ["#btn-resume-workday", "button[title='Reanudar']", ".fa-redo"],
-        "END": ["#btn-stop-workday", "button[title='Finalizar']", ".fa-stop"]
+        "START": ["#btn-start-workday"],
+        "PAUSE": ["#btn-lunch-pause"],
+        "RESUME": ["#btn-resume-workday"],
+        "END": ["#btn-stop-workday"]
     }
     
     target_selectors = selectors_map.get(action, [])
@@ -217,7 +218,12 @@ def run_automation(email, password, action, headless=True, dry_run=False):
                     found_selector = sel
                     break
                 else:
-                    print(f"Selector exists but hidden: {sel}")
+                    print(f"Selector exists but HIDDEN: {sel}")
+                    print(">>> This likely means you are ALREADY CLOCKED IN for this action.")
+                    print(">>> The button is not available. Exiting gracefully.")
+                    browser.close()
+                    p.stop()
+                    sys.exit(0)  # Exit with 0 (not an error, just already done)
         except Exception as e:
             print(f"Check failed for {sel}: {e}")
             
@@ -333,10 +339,14 @@ def run_automation(email, password, action, headless=True, dry_run=False):
         time.sleep(1)
         
     except Exception as e:
-        print(f"Fatal error clicking button: {e}")
+        print(f"FATAL ERROR clicking button: {e}")
+        print(">>> Click failed. Taking error screenshot and exiting.")
+        page.screenshot(path=f"error_click_{action}_{time.strftime('%Y%m%d_%H%M%S')}.png")
+        browser.close()
+        p.stop()
+        sys.exit(1)  # Exit with error code
 
     # Continue to confirmation check
-        # Don't exit yet, check if confirm appeared anyway
 
     # 3. HANDLE CONFIRMATION (Only START and PAUSE require confirmation)
     if action in ["START", "PAUSE"]:
