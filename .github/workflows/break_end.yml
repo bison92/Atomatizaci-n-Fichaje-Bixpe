@@ -1,8 +1,10 @@
 name: Break End (Resume)
 
 on:
+  repository_dispatch:
+    types: [break_end]  # Triggered by cron-job.org
   schedule:
-    # Mon-Thu (1-4): 14:44 CET -> 13:44 UTC (16 min early to compensate GH delay)
+    # Backup: Mon-Thu 14:44 CET (in case cron-job.org fails)
     - cron: '44 13 * * 1-4'
     # No break on Fridays (jornada intensiva)
   workflow_dispatch:

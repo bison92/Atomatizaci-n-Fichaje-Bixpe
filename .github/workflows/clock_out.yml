@@ -1,10 +1,11 @@
 name: Clock Out (End)
 
 on:
+  repository_dispatch:
+    types: [clock_out]  # Triggered by cron-job.org
   schedule:
-    # Mon-Thu (1-4): 17:44 CET -> 16:44 UTC (16 min early to compensate GH delay)
+    # Backup: Mon-Thu 17:44 CET, Fri 13:44 CET (in case cron-job.org fails)
     - cron: '44 16 * * 1-4'
-    # Fri (5): 13:44 CET -> 12:44 UTC (jornada intensiva)
     - cron: '44 12 * * 5'
   workflow_dispatch:
 
