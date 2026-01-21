@@ -2,8 +2,8 @@ name: Break Start (Pause)
 
 on:
   schedule:
-    # Mon-Thu (1-4): 14:00 CET -> 13:00 UTC
-    - cron: '0 13 * * 1-4'
+    # Mon-Thu (1-4): 13:44 CET -> 12:44 UTC (16 min early to compensate GH delay)
+    - cron: '44 12 * * 1-4'
     # No break on Fridays (jornada intensiva)
   workflow_dispatch:
 

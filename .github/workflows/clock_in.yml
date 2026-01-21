@@ -2,10 +2,10 @@ name: Clock In (Start)
 
 on:
   schedule:
-    # Mon-Thu (1-4): 08:30 CET -> 07:30 UTC
-    - cron: '30 7 * * 1-4'
-    # Fri (5): 08:00 CET -> 07:00 UTC
-    - cron: '0 7 * * 5'
+    # Mon-Thu (1-4): 08:14 CET -> 07:14 UTC (16 min early to compensate GH delay)
+    - cron: '14 7 * * 1-4'
+    # Fri (5): 07:44 CET -> 06:44 UTC
+    - cron: '44 6 * * 5'
   workflow_dispatch:
 
 jobs:

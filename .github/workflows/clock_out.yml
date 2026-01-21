@@ -2,10 +2,10 @@ name: Clock Out (End)
 
 on:
   schedule:
-    # Mon-Thu (1-4): 18:00 CET -> 17:00 UTC
-    - cron: '0 17 * * 1-4'
-    # Fri (5): 14:00 CET -> 13:00 UTC (jornada intensiva)
-    - cron: '0 13 * * 5'
+    # Mon-Thu (1-4): 17:44 CET -> 16:44 UTC (16 min early to compensate GH delay)
+    - cron: '44 16 * * 1-4'
+    # Fri (5): 13:44 CET -> 12:44 UTC (jornada intensiva)
+    - cron: '44 12 * * 5'
   workflow_dispatch:
 
 jobs:
