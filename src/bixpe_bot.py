@@ -415,9 +415,11 @@ if __name__ == "__main__":
     holidays_file = os.path.join(os.path.dirname(__file__), "..", "holidays.json")
     holidays = load_holidays(holidays_file)
 
-    if not args.force:
-        if is_holiday_or_weekend(holidays):
-            sys.exit(0)
+    # ALWAYS check holidays/weekends (even with --force)
+    # --force only skips schedule/time checks, not holiday checks
+    if is_holiday_or_weekend(holidays):
+        print("Exiting: Today is a holiday or weekend.")
+        sys.exit(0)
 
     # Load Schedule
     schedule_file = os.path.join(os.path.dirname(__file__), "..", "schedule.json")
