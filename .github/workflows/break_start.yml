@@ -3,11 +3,7 @@ name: Break Start (Pause)
 on:
   repository_dispatch:
     types: [break_start]  # Triggered by cron-job.org
-  schedule:
-    # Backup: Mon-Thu 13:44 CET (in case cron-job.org fails)
-    - cron: '44 12 * * 1-4'
-    # No break on Fridays (jornada intensiva)
-  workflow_dispatch:
+  workflow_dispatch:  # Manual trigger
 
 jobs:
   break-start:

@@ -3,11 +3,7 @@ name: Clock In (Start)
 on:
   repository_dispatch:
     types: [clock_in]  # Triggered by cron-job.org
-  schedule:
-    # Backup: Mon-Thu 08:14 CET, Fri 07:44 CET (in case cron-job.org fails)
-    - cron: '14 7 * * 1-4'
-    - cron: '44 6 * * 5'
-  workflow_dispatch:
+  workflow_dispatch:  # Manual trigger
 
 jobs:
   clock-in:

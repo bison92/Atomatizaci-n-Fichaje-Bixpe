@@ -3,11 +3,7 @@ name: Break End (Resume)
 on:
   repository_dispatch:
     types: [break_end]  # Triggered by cron-job.org
-  schedule:
-    # Backup: Mon-Thu 14:44 CET (in case cron-job.org fails)
-    - cron: '44 13 * * 1-4'
-    # No break on Fridays (jornada intensiva)
-  workflow_dispatch:
+  workflow_dispatch:  # Manual trigger
 
 jobs:
   break-end:
