@@ -2,6 +2,19 @@
 
 Script de automatización para fichar entrada/salida y pausas en la plataforma Bixpe Control Horario.
 
+## Cómo funciona
+
+```
+┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+│   cron-job.org  │ ──▶  │  GitHub Actions │ ──▶  │     Bixpe       │
+│  (Disparador)   │      │    (Script)     │      │   (Fichaje)     │
+└─────────────────┘      └─────────────────┘      └─────────────────┘
+```
+
+1. **cron-job.org** dispara el workflow a la hora programada
+2. **GitHub Actions** ejecuta el script de Python
+3. **El script** abre Bixpe, hace login y ficha automáticamente
+
 ## Características
 
 - ✅ Fichaje automático de entrada (START)
@@ -10,33 +23,34 @@ Script de automatización para fichar entrada/salida y pausas en la plataforma B
 - ✅ Fichaje de salida (END)
 - ✅ Gestión de festivos y vacaciones
 - ✅ Modo simulación para pruebas
-- ✅ Integración con cron-job.org para máxima puntualidad
+- ✅ Integración con cron-job.org para máxima puntualidad (~1-2 min)
 
-## Requisitos
+## Horarios programados
 
-- Python 3.11+
-- Playwright
-- Cuenta en Bixpe Control Horario
+Los horarios se configuran en **cron-job.org**, no en este repositorio.
 
-## Instalación
-
-```bash
-pip install -r requirements.txt
-playwright install chromium
-```
+| Acción | Lunes-Jueves | Viernes |
+|--------|--------------|---------|
+| Entrada (START) | 08:30 | 08:00 |
+| Inicio pausa (PAUSE) | 14:00 | - |
+| Fin pausa (RESUME) | 15:00 | - |
+| Salida (END) | 18:00 | 14:00 |
 
 ## Configuración
 
-### Variables de entorno
-Configura las siguientes variables de entorno o crea un archivo `.env`:
+### 1. Credenciales (GitHub Secrets)
 
-```env
-BIXPE_EMAIL=tu_email@ejemplo.com
-BIXPE_PASSWORD=tu_contraseña
-```
+Las credenciales de Bixpe se almacenan de forma segura en GitHub:
+- `Settings` → `Secrets and variables` → `Actions`
 
-### Festivos y vacaciones
-Edita `holidays.json` para añadir días festivos o de vacaciones:
+| Secret | Descripción |
+|--------|-------------|
+| `BIXPE_EMAIL` | Tu email de Bixpe |
+| `BIXPE_PASSWORD` | Tu contraseña de Bixpe |
+
+### 2. Festivos y vacaciones
+
+Edita `holidays.json` para añadir días en los que NO se debe fichar:
 
 ```json
 [
@@ -46,53 +60,52 @@ Edita `holidays.json` para añadir días festivos o de vacaciones:
 ]
 ```
 
-### Horarios
-Configura los horarios en `schedule.json`:
+Los fines de semana se detectan automáticamente.
 
-```json
-{
-    "mon_thu": {
-        "start": "08:30",
-        "break_start": "14:00",
-        "break_end": "15:00",
-        "end": "18:00"
-    },
-    "friday": {
-        "start": "08:00",
-        "break_start": null,
-        "break_end": null,
-        "end": "14:00"
-    },
-    "timezone": "Europe/Madrid"
-}
-```
+### 3. Disparador externo (cron-job.org)
 
-## Uso
+Los workflows se activan mediante [cron-job.org](https://cron-job.org):
+- Crea una cuenta gratuita
+- Configura los 6 jobs con los horarios deseados
+- Cada job envía una petición POST a la API de GitHub
 
-### Ejecución manual
+## Uso manual
+
 ```bash
 # Fichar entrada
-python src/bixpe_bot.py --action START
+python src/bixpe_bot.py --action START --force
 
 # Iniciar pausa
-python src/bixpe_bot.py --action PAUSE
+python src/bixpe_bot.py --action PAUSE --force
 
 # Fin de pausa
-python src/bixpe_bot.py --action RESUME
+python src/bixpe_bot.py --action RESUME --force
 
 # Fichar salida
-python src/bixpe_bot.py --action END
+python src/bixpe_bot.py --action END --force
 
 # Modo simulación (no ficha realmente)
 python src/bixpe_bot.py --action START --simulate
 ```
 
-### Ejecución automática
-Los workflows se activan automáticamente mediante [cron-job.org](https://cron-job.org) para máxima puntualidad.
+## Archivos del proyecto
+
+| Archivo | Descripción |
+|---------|-------------|
+| `src/bixpe_bot.py` | Script principal de automatización |
+| `holidays.json` | Lista de festivos y vacaciones |
+| `.github/workflows/` | Workflows de GitHub Actions |
+| `SETUP_GUIA.md` | Guía para configurar tu propia copia |
+| `CHANGELOG.md` | Historial de cambios |
+
+## Para nuevos usuarios
+
+Si quieres configurar tu propia automatización, sigue la guía completa:
+👉 [SETUP_GUIA.md](SETUP_GUIA.md)
 
 ## Historial de cambios
 
-Consulta el [CHANGELOG.md](CHANGELOG.md) para ver todos los cambios y actualizaciones.
+Consulta el [CHANGELOG.md](CHANGELOG.md) para ver todas las actualizaciones.
 
 ## Licencia
 
