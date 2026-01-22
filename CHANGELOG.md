@@ -2,6 +2,35 @@
 
 Todos los cambios notables de este proyecto se documentarán en este archivo.
 
+## [1.2.0] - 2026-01-22
+
+### Añadido
+- **Integración con cron-job.org**: Los workflows ahora se activan externamente mediante cron-job.org en lugar del scheduler interno de GitHub Actions. Esto proporciona mayor puntualidad (1-2 minutos vs 0-60 minutos de retraso).
+- **Disparador `repository_dispatch`**: Los workflows aceptan eventos externos vía API de GitHub.
+- **Disparador manual `workflow_dispatch`**: Permite ejecutar workflows manualmente desde la interfaz de GitHub.
+
+### Cambiado
+- **Eliminación de schedules internos**: Se eliminaron los cron schedules de GitHub Actions para evitar duplicación. Ahora solo cron-job.org dispara los workflows.
+- **Selector PAUSE corregido**: Cambiado de `#btn-lunch-pause` a `#btn-pause-lunch` (selector correcto según el HTML de Bixpe).
+- **Lógica de confirmación**: START y END requieren confirmación; PAUSE y RESUME no.
+
+### Corregido
+- **Comprobación de festivos siempre activa**: Los festivos definidos en `holidays.json` ahora se comprueban siempre, incluso con `--force`. El flag `--force` solo omite la comprobación de horario.
+
+### Configuración de cron-job.org
+Los siguientes jobs deben configurarse en [cron-job.org](https://cron-job.org):
+
+| Job | Horario | event_type |
+|-----|---------|------------|
+| Clock In (L-J) | 08:30 | `clock_in` |
+| Clock In (V) | 08:00 | `clock_in` |
+| Break Start (L-J) | 14:00 | `break_start` |
+| Break End (L-J) | 15:00 | `break_end` |
+| Clock Out (L-J) | 18:00 | `clock_out` |
+| Clock Out (V) | 14:00 | `clock_out` |
+
+---
+
 ## [1.1.0] - 2026-01-21
 
 ### Añadido
@@ -13,7 +42,7 @@ Todos los cambios notables de este proyecto se documentarán en este archivo.
 - **Selectores de Login**: Actualizados para usar IDs precisos (`#emailLogin`, `#passwordLogin`) basados en la documentación de Bixpe.
 - **Selectores de Botones de Acción**: Actualizados para usar IDs precisos:
   - INICIO: `#btn-start-workday`
-  - PAUSA: `#btn-lunch-pause`
+  - PAUSA: `#btn-pause-lunch`
   - REANUDAR: `#btn-resume-workday`
   - FIN: `#btn-stop-workday`
 - **Manejo de Diálogo de Confirmación**: Ahora usa selectores específicos de SweetAlert2 (`button.swal2-confirm`, `button.swal2-cancel`).
@@ -33,6 +62,8 @@ Todos los cambios notables de este proyecto se documentarán en este archivo.
 - Mejorado logging con marcas de tiempo
 - Añadida subida de artefactos de depuración en fallo (volcados HTML + capturas)
 - Nombres de artefactos únicos por ejecución para evitar sobrescritura
+
+---
 
 ## [1.0.0] - 2026-01-18
 
