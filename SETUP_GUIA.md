@@ -28,7 +28,10 @@ Esta guía te permitirá configurar tu propia automatización de fichaje en Bixp
 
 Ahora tienes tu propia copia en: `https://github.com/TU_USUARIO/Atomatizaci-n-Fichaje-Bixpe`
 
-> ⚠️ **IMPORTANTE**: A partir de ahora, sustituye `TU_USUARIO` por tu nombre de usuario de GitHub en todas las URLs.
+> ✅ **BUENA NOTICIA**: El código es genérico, NO necesitas modificar ningún archivo. 
+> 
+> ⚠️ **ÚNICO CAMBIO NECESARIO**: En el **Paso 6** (cron-job.org), deberás poner TU usuario de GitHub en la URL de los cron jobs.
+
 
 ---
 
