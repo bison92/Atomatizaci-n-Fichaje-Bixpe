@@ -198,7 +198,7 @@ def run_automation(email, password, action, headless=True, dry_run=False):
     # IMPORTANT: Only use button/div selectors, NOT SVG icons (.fa-*) as they don't have .click()
     selectors_map = {
         "START": ["#btn-start-workday"],
-        "PAUSE": ["#btn-lunch-pause"],
+        "PAUSE": ["#btn-pause-lunch"],
         "RESUME": ["#btn-resume-workday"],
         "END": ["#btn-stop-workday"]
     }
